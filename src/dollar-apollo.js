@@ -16,7 +16,10 @@ export class DollarApollo {
   }
 
   query (options) {
-    return this.getClient(options).query(options)
+    this.updateLoadingKey(true)
+    const res = this.getClient(options).query(options)
+    res.then(() => this.updateLoadingKey(false), () => this.updateLoadingKey(false))
+    return res
   }
 
   getClient (options) {
@@ -56,7 +59,16 @@ export class DollarApollo {
   }
 
   mutate (options) {
-    return this.getClient(options).mutate(options)
+    this.updateLoadingKey(true)
+    const res = this.getClient(options).mutate(options)
+    res.then(() => this.updateLoadingKey(false), () => this.updateLoadingKey(false))
+    return res
+  }
+
+  updateLoadingKey(isIncrement) {
+    if (options.loadingKey) {
+        this.vm[options.loadingKey] = this.vm[options.loadingKey] + (isIncrement ? 1 : -1);
+    }
   }
 
   subscribe (options) {
