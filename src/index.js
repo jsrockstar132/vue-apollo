@@ -16,7 +16,10 @@ const prepare = function prepare () {
   this._apolloPrepared = true
 
   // Prepare properties
-  let apollo = this.$options.apollo
+  // let apollo = this.$options.apollo
+  // HACK: to make compatible with vue-class-components using TS
+  let apollo = this.$data.apollo
+  
   if (apollo) {
     this._apolloQueries = {}
     this._apolloInitData = {}
@@ -59,6 +62,12 @@ const launch = function launch () {
     defineReactiveSetter(this.$apollo, 'skipAllSubscriptions', apollo.$skipAllSubscriptions)
     defineReactiveSetter(this.$apollo, 'client', apollo.$client)
   }
+}
+
+// HACK: to make compatible with vue-class-components using TS
+const prepareAndLaunch = function prepareAndLaunch () {
+    prepare.apply(this);
+    launch.apply(this);
 }
 
 function defineReactiveSetter ($apollo, key, value) {
@@ -110,14 +119,16 @@ function install (Vue, options) {
     // Vue 1.x
     init: prepare,
     // Vue 2.x
-    beforeCreate: prepare,
+    // HACK: to make compatible with vue-class-components using TS
+    created: prepareAndLaunch,
 
     // Better devtools support
     data () {
       return this._apolloInitData || {}
     },
 
-    created: launch,
+    // HACK: to make compatible with vue-class-components using TS
+    // created: launch,
 
     destroyed: function () {
       if (this._apollo) {
