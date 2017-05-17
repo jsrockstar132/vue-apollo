@@ -16,9 +16,9 @@ export class DollarApollo {
   }
 
   query (options) {
-    this.updateLoadingKey(true)
+    this.updateLoadingKey(options, true)
     const res = this.getClient(options).query(options)
-    res.then(() => this.updateLoadingKey(false), () => this.updateLoadingKey(false))
+    res.then(() => this.updateLoadingKey(options, false), () => this.updateLoadingKey(options, false))
     return res
   }
 
@@ -59,13 +59,13 @@ export class DollarApollo {
   }
 
   mutate (options) {
-    this.updateLoadingKey(true)
+    this.updateLoadingKey(options, true)
     const res = this.getClient(options).mutate(options)
-    res.then(() => this.updateLoadingKey(false), () => this.updateLoadingKey(false))
+    res.then(() => this.updateLoadingKey(options, false), () => this.updateLoadingKey(options, false))
     return res
   }
 
-  updateLoadingKey(isIncrement) {
+  updateLoadingKey(options, isIncrement) {
     if (options.loadingKey) {
         this.vm[options.loadingKey] = this.vm[options.loadingKey] + (isIncrement ? 1 : -1);
     }
