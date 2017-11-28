@@ -1,19 +1,24 @@
 # Apollo and GraphQL for Vue.js
 
 [![npm](https://img.shields.io/npm/v/vue-apollo.svg) ![npm](https://img.shields.io/npm/dm/vue-apollo.svg)](https://www.npmjs.com/package/vue-apollo)
+[![vue1](https://img.shields.io/badge/apollo-1.x-blue.svg)](http://apollodata.com/)
 [![vue1](https://img.shields.io/badge/vue-1.x-brightgreen.svg) ![vue2](https://img.shields.io/badge/vue-2.x-brightgreen.svg)](https://vuejs.org/)
 
 ![schema](https://cdn-images-1.medium.com/max/800/1*H9AANoofLqjS10Xd5TwRYw.png)
 
-Integrates [apollo](http://www.apollostack.com/) in your [Vue](http://vuejs.org) components with declarative queries. Compatible with Vue 1.0+ and 2.0+
+**Apollo 2.x support in preview, [read more here](https://github.com/Akryum/vue-apollo/tree/next#migrating-from-vue-apollo-2x-and-apollo-1x)!**
+
+Integrates [apollo](http://www.apollostack.com/) in your [Vue](http://vuejs.org) components with declarative queries. Compatible with Vue 1.0+ and 2.0+. [Live demo](https://jsfiddle.net/Akryum/oyejk2qL/)
 
 [<img src="https://assets-cdn.github.com/favicon.ico" alt="icon" width="16" height="16"/> More vue-apollo examples](https://github.com/Akryum/vue-apollo-example)
 
 [<img src="https://assets-cdn.github.com/favicon.ico" alt="icon" width="16" height="16"/> Apollo graphql server example](https://github.com/Akryum/apollo-server-example)
 
-[<img src="https://assets-cdn.github.com/favicon.ico" alt="icon" width="16" height="16"/> Apollo "hello world" example app](https://github.com/Akryum/frontpage-vue-app) (outdated)
+[<img src="https://www.howtographql.com/static/howtographql.d1a2e5b4.svg" alt="icon" width="16" height="16"/> How to GraphQL](https://www.howtographql.com/vue-apollo/0-introduction/)
 
-[<img src="https://cdn-static-1.medium.com/_/fp/icons/favicon-medium.TAS6uQ-Y7kcKgi0xjcYHXw.ico" alt="icon" width="16" height="16"/> Howto on Medium](https://dev-blog.apollodata.com/use-apollo-in-your-vuejs-app-89812429d8b2#.pdd4hmcrc)
+[<img src="https://conf.vuejs.org/img/logo-48.png" alt="icon" width="16" height="16"/> VueConf 2017 demo](https://github.com/Akryum/vueconf-2017-demo) &amp; [slides](http://slides.com/akryum/graphql#/)
+
+[<img src="https://assets-cdn.github.com/favicon.ico" alt="icon" width="16" height="16"/> Devfest Summit Example](https://github.com/Akryum/devfest-nantes-2017) (with lots of features like SSR, OAuth, Realtime updates, Apollo Optics...)
 
 ## Table of contents
 
@@ -37,13 +42,15 @@ Integrates [apollo](http://www.apollostack.com/) in your [Vue](http://vuejs.org)
   - [Skipping the subscription](#skipping-the-subscription)
   - [Manually adding a smart Subscription](#manually-adding-a-smart-subscription)
 - [Pagination with `fetchMore`](#pagination-with-fetchmore)
+- [Special options](#special-options)
 - [Skip all](#skip-all)
 - [Multiple clients](#multiple-clients)
 - [Server-Side Rendering](#server-side-rendering)
+- [API Reference](#api-reference)
 
 ## Installation
 
-Try and install this packages before server side set (of packages), add apollo to meteor.js before then, too.
+Try and install these packages before server side set (of packages), add apollo to meteor.js before then, too.
 
     npm install --save vue-apollo apollo-client
 
@@ -51,14 +58,13 @@ In your app, create an `ApolloClient` instance and install the `VueApollo` plugi
 
 ```javascript
 import Vue from 'vue'
-import { ApolloClient, createNetworkInterface } from 'apollo-client'
+import { ApolloClient, createBatchingNetworkInterface } from 'apollo-client'
 import VueApollo from 'vue-apollo'
 
 // Create the apollo client
 const apolloClient = new ApolloClient({
-  networkInterface: createNetworkInterface({
+  networkInterface: createBatchingNetworkInterface({
     uri: 'http://localhost:3020/graphql',
-    transportBatching: true,
   }),
   connectToDevTools: true,
 })
@@ -285,13 +291,13 @@ apollo: {
 },
 ```
 
-**This will called once when the component is created and it must return the option object.**
+**This will be called once when the component is created and it must return the option object.**
 
 *This also works for [subscriptions](#subscriptions).*
 
 ### Reactive query definition
 
-You can use a function for the `query` option, that will update the graphql query definition automatically:
+You can use a function for the `query` option. This will update the graphql query definition automatically:
 
 ```javascript
 // The featured tag can be either a random tag or the last added tag
@@ -394,7 +400,7 @@ Here, `skip` will be called automatically when the `skipQuery` component propert
 You can also access the query directly and set the `skip` property:
 
 ```javascript
-this.$apollo.quries.tags.skip = true
+this.$apollo.queries.tags.skip = true
 ```
 
 ### Advanced options
@@ -402,9 +408,10 @@ this.$apollo.quries.tags.skip = true
 These are the available advanced options you can use:
 - `update(data) {return ...}` to customize the value that is set in the vue property, for example if the field names don't match.
 - `result(ApolloQueryResult)` is a hook called when a result is received (see documentation for [ApolloQueryResult](http://dev.apollodata.com/core/apollo-client-api.html#ApolloQueryResult)).
-- `error(error)` is a hook called when there are errors, `error` being an Apollo error object with either a `graphQLErrors` property or a `networkError` property.
-- `loadingKey` will update the component data property you pass as the value. You should initialize this property to `0` in the component `data()` hook. When the query is loading, this property will be incremented by 1 and as soon as it no longer is, the property will be decremented by 1. That way, the property can represent a counter of currently loading queries.
-- `watchLoading(isLoading, countModifier)` is a hook called when the loading state of the query changes. The `countModifier` parameter is either equal to `1` when the query is now loading, or `-1` when the query is no longer loading.
+- `error(error)` is a hook called when there are errors. `error` is an Apollo error object with either a `graphQLErrors` property or a `networkError` property.
+- `loadingKey` will update the component data property you pass as the value. You should initialize this property to `0` in the component `data()` hook. When the query is loading, this property will be incremented by 1; when it is no longer loading, it will be decremented by 1. That way, the property can represent a counter of currently loading queries.
+- `watchLoading(isLoading, countModifier)` is a hook called when the loading state of the query changes. The `countModifier` parameter is either equal to `1` when the query is loading, or `-1` when the query is no longer loading.
+- `manual` is a boolean to disable the automatic property update. If you use it, you then need to specify a `result` callback (see example below).
 
 
 ```javascript
@@ -461,6 +468,20 @@ If you use `ES2015`, you can also write the `update` like this:
 
 ```javascript
 update: data => data.ping
+```
+
+Manual mode example:
+
+```javascript
+{
+  query: gql`...`,
+  manual: true,
+  result ({ data, loading }) {
+    if (!loading) {
+      this.items = data.items
+    }
+  },
+}
 ```
 
 ### Reactive Query Example
@@ -545,7 +566,7 @@ created () {
 
 ## Mutations
 
-Mutations are queries that changes your data state on your apollo server. For more info, visit the [apollo doc](http://dev.apollodata.com/core/apollo-client-api.html#ApolloClient\.mutate).
+Mutations are queries that change your data state on your apollo server. For more info, visit the [apollo doc](http://dev.apollodata.com/core/apollo-client-api.html#ApolloClient\.mutate). There is a mutation-focused [example app](https://github.com/Akryum/vue-apollo-todos) you can look at.
 
 ```javascript
 methods: {
@@ -568,17 +589,15 @@ methods: {
         label: newTag,
       },
       // Update the cache with the result
-      // 'tagList' is the name of the query declared before
-      // that will be updated with the optimistic response
-      // and the result of the mutation
-      updateQueries: {
-        tagList: (previousResult, { mutationResult }) => {
-          // We incorporate any received result (either optimistic or real)
-          // into the 'tagList' query we set up earlier
-          return {
-            tags: [...previousResult.tags, mutationResult.data.addTag],
-          }
-        },
+      // The query will be updated with the optimistic response
+      // and then with the real result of the mutation
+      update: (store, { data: { newTag } }) => {
+        // Read the data from our cache for this query.
+        const data = store.readQuery({ query: TAGS_QUERY })
+        // Add our tag from the mutation to the end
+        data.tags.push(newTag)
+        // Write our data back to the cache.
+        store.writeQuery({ query: TAGS_QUERY, data })
       },
       // Optimistic UI
       // Will be treated as a 'fake' result as soon as the request is made
@@ -667,6 +686,10 @@ export const resolvers = {
 
 To make enable the websocket-based subscription, a bit of additional setup is required:
 
+```
+npm install --save subscriptions-transport-ws
+```
+
 ```javascript
 import Vue from 'vue'
 import { ApolloClient, createNetworkInterface } from 'apollo-client'
@@ -698,24 +721,45 @@ const apolloClient = new ApolloClient({
 })
 
 // Install the plugin like before
-Vue.use(VueApollo, {
-  apolloClient,
-})
-
-// Your app is now subscription-ready!
-
-import App from './App.vue'
-
-new Vue({
-  el: '#app',
-  render: h => h(App)
-})
-
+Vue.use(VueApollo)
 ```
 
 ### subscribeToMore
 
-If you need to update a query result from a subscription, the best way is using the `subscribeToMore` query method. You can access the queries you defined in the `apollo` option with `this.$apollo.queries.<name>`, so it would look like this:
+If you need to update a query result from a subscription, the best way is using the `subscribeToMore` query method. Just add a `subscribeToMore` to your query:
+
+```javascript
+apollo: {
+  tags: {
+    query: TAGS_QUERY,
+    subscribeToMore: {
+      document: gql`subscription name($param: String!) {
+        itemAdded(param: $param) {
+          id
+          label
+        }
+      }`,
+      // Variables passed to the subscription. Since we're using a function,
+      // they are reactive
+      variables () {
+        return {
+          param: this.param,
+        }
+      },
+      // Mutate the previous result
+      updateQuery: (previousResult, { subscriptionData }) => {
+        // Here, return the new result from the previous with the new data
+      },
+    }
+  }
+}
+```
+
+*Note that you can pass an array of subscriptions to `subscribeToMore` to subscribe to multiple subscriptions on this query.*
+
+#### Alternate usage
+
+You can access the queries you defined in the `apollo` option with `this.$apollo.queries.<name>`, so it would look like this:
 
 ```javascript
 this.$apollo.queries.tags.subscribeToMore({
@@ -791,7 +835,7 @@ this.$watch(() => this.type, (type, oldType) => {
 
 ### subscribe
 
-**:warning: If you want to update a query with the result of the subscription, use `subscribeForMore`. The methods below are suitable for a 'notify' use case.**
+**:warning: If you want to update a query with the result of the subscription, use `subscribeToMore`. The methods below are suitable for a 'notify' use case.**
 
 Use the `$apollo.subscribe()` method to subscribe to a GraphQL subscription that will get killed automatically when the component is destroyed:
 
@@ -858,7 +902,7 @@ apollo: {
 
 You can then access the subscription with `this.$apollo.subscriptions.<name>`.
 
-*Just like queries, you can declare the subscription [with a function](#option-function), and you can declare the `query` option [with a reactive function](#reactive-query-definition).*
+*Just like for queries, you can declare the subscription [with a function](#option-function), and you can declare the `query` option [with a reactive function](#reactive-query-definition).*
 
 ### Skipping the subscription
 
@@ -992,6 +1036,7 @@ export default {
 
           return {
             tagsPage: {
+              __typename: previousResult.tagsPage.__typename,
               // Merging the tag list
               tags: [...previousResult.tagsPage.tags, ...newTags],
               hasMore,
@@ -1005,6 +1050,50 @@ export default {
 </script>
 ```
 
+**Don't forget to include the `__typename` to the new result.**
+
+## Special options
+
+The special options begin with `$` in the `apollo` object.
+
+- `$skip` to disable all queries and subscriptions (see below)
+- `$skipAllQueries` to disable all queries (see below)
+- `$skipAllSubscriptions` to disable all subscriptions (see below)
+- `$client` to use a client by default (see below)
+- `$loadingKey` for a default loading key (see `loadingKey` advanced options for smart queries)
+- `$error` to catch errors in a default handler (see `error` advanced options for smart queries)
+
+Example:
+
+```html
+<script>
+export default {
+  data () {
+    return {
+      loading: 0,
+    }
+  },
+  apollo: {
+    $loadingKey: 'loading',
+    query1: { ... },
+    query2: { ... },
+  },
+}
+</script>
+```
+
+You can define in the apollo provider a default set of options to apply to the `apollo` definitions. For example:
+
+```javascript
+const apolloProvider = new VueApollo({
+  defaultClient: apolloClient,
+  defaultOptions: {
+    // apollo options applied to all components that are using apollo
+    $loadingKey: 'loading',
+  },
+})
+```
+
 ## Skip all
 
 You can disable all the queries for the component with `skipAllQueries`, all the subscriptions with `skipAllSubscriptions` and both with `skipAll`:
@@ -1015,7 +1104,7 @@ this.$apollo.skipAllSubscriptions = true
 this.$apollo.skipAll = true
 ```
 
-You can also declare these properties in the `apollo` option of the component. It can be booleans:
+You can also declare these properties in the `apollo` option of the component. They can be booleans:
 
 ```javascript
 apollo: {
@@ -1075,6 +1164,8 @@ On the queries you want to prefetch on the server, add the `prefetch` option. It
  - a function that gets the context object (which can contain the URL for example) and return a variables object,
  - `true` (query's `variables` is reused).
 
+If you are returning a variables object in the `prefetch` option, make sure it matches the result of the `variables` option. If they do not match, the query's data property will not be populated while rendering the template server-side.
+
 **Warning! You don't have access to the component instance when doing prefetching on the server. Don't use `this` in `prefetch`!**
 
 Example:
@@ -1124,7 +1215,7 @@ export default {
 }
 ```
 
-You can also tell vue-apollo that some components not used in a `router-view` (and thus not in vue-router `matchedComponents`) need to be prefetched, with the `willPrefetch` method:
+You can also tell vue-apollo that some components not used in a `router-view` (and thus, not in vue-router `matchedComponents`) need to be prefetched, with the `willPrefetch` method:
 
 ```javascript
 import { willPrefetch } from 'vue-apollo'
@@ -1186,7 +1277,7 @@ return new Promise((resolve, reject) => {
       }, matchedComponents),
     ]).then(() => {
       // Inject the Vuex state and the Apollo cache on the page.
-      // This will prevent unecessary queries.
+      // This will prevent unnecessary queries.
 
       // Vuex
       js += `window.__INITIAL_STATE__=${JSON.stringify(store.state)};`
@@ -1223,6 +1314,17 @@ It takes an `options` argument which defaults to:
   globalName: '__APOLLO_STATE__',
   // Global object on which the variable is set
   attachTo: 'window',
+  // Prefix for the keys of each apollo client state
+  exportNamespace: '',
+}
+```
+
+You can also use the `apolloProvider.getStates` method to get the JS object instead of the script string.
+
+It takes an `options` argument which defaults to:
+
+```javascript
+{
   // Prefix for the keys of each apollo client state
   exportNamespace: '',
 }
@@ -1360,6 +1462,129 @@ router.onReady(() => {
   // Prefetch, render HTML (see above)
 })
 ```
+
+---
+
+# API Reference
+
+WIP (PR welcome!)
+
+## ApolloProvider
+
+### Constructor
+
+```javascript
+const apolloProvider = new VueApollo({
+  // Multiple clients support
+  // Use the 'client' option inside queries
+  // or '$client' on the apollo definition
+  clients: {
+    a: apolloClientA,
+    b: apolloClientB,
+  },
+  // Default client
+  defaultClient: apolloClient,
+  // Default 'apollo' definition
+  defaultOptions: {
+    // See 'apollo' definition
+    // For example: default loading key
+    $loadingKey: 'loading',
+  },
+  // Watch loading state for all queries
+  // See the 'watchLoading' advanced option
+  watchLoading (state, mod) {
+    loading += mod
+    console.log('Global loading', loading, mod)
+  },
+  // Global error handler for all smart queries and subscriptions
+  errorHandler (error) {
+    console.log('Global error handler')
+    console.error(error)
+  },
+})
+```
+
+Use the apollo provider into your Vue app:
+
+```javascript
+new Vue({
+  el: '#app',
+  apolloProvider,
+  render: h => h(App),
+})
+```
+
+### Methods
+
+#### prefetchAll
+
+(SSR) Prefetch all queued component definitions and returns a promise resolved when all corresponding apollo data is ready.
+
+```javascript
+await apolloProvider.prefetchAll (context, componentDefs, options)
+```
+
+`context` is passed as the argument to the `prefetch` options inside the smart queries. It may contain the route and the store.
+
+`options` defaults to:
+
+```javascript
+{
+  // Include components outside of the routes
+  // that are registered with `willPrefetch`
+  includeGlobal: true,
+}
+```
+
+#### getStates
+
+(SSR) Returns the apollo stores states as JavaScript objects.
+
+```JavaScript
+const states = apolloProvider.getStates(options)
+```
+
+`options` defaults to:
+
+```javascript
+{
+  // Prefix for the keys of each apollo client state
+  exportNamespace: '',
+}
+```
+
+#### exportStates
+
+(SSR) Returns the apollo stores states as JavaScript code inside a String. This code can be directly injected to the page HTML inside a `<script>` tag.
+
+```javascript
+const js = apolloProvider.exportStates(options)
+```
+
+`options` defaults to:
+
+```javascript
+{
+  // Global variable name
+  globalName: '__APOLLO_STATE__',
+  // Global object on which the variable is set
+  attachTo: 'window',
+  // Prefix for the keys of each apollo client state
+  exportNamespace: '',
+}
+```
+
+## Dollar Apollo
+
+This is the apollo manager added to any component that uses apollo. It can be accessed inside a component with `this.$apollo`.
+
+## Smart Query
+
+Each query declared in the `apollo` definition (that is, which doesn't start with a `$` char) in a component results in the creation of a smart query object.
+
+## Smart Subscription
+
+Each subscription declared in the `apollo.$subscribe` option in a component results in the creation of a smart subscription object.
 
 ---
 

@@ -9,7 +9,7 @@ class SmartApollo {
   constructor (vm, key, options, autostart = true) {
     this.vm = vm
     this.key = key
-    this.options = options
+    this.options = Object.assign({}, options)
     this._skip = false
     this._watchers = []
 
@@ -21,6 +21,19 @@ class SmartApollo {
         this.options.query = query
         this.refresh()
       }))
+    }
+    // Query callback
+    if (typeof this.options.document === 'function') {
+      const queryCb = this.options.document.bind(this.vm)
+      this.options.document = queryCb()
+      this._watchers.push(this.vm.$watch(queryCb, document => {
+        this.options.document = document
+        this.refresh()
+      }))
+    }
+
+    if (this.vm.$isServer) {
+      this.options.fetchPolicy = 'cache-first'
     }
 
     if (autostart) {
@@ -72,7 +85,7 @@ class SmartApollo {
       let cb = this.executeApollo.bind(this)
       cb = this.options.throttle ? throttle(cb, this.options.throttle) : cb
       cb = this.options.debounce ? debounce(cb, this.options.debounce) : cb
-      this.unwatchVariables = this.vm.$watch(() => this.options.variables.bind(this.vm)(), cb, {
+      this.unwatchVariables = this.vm.$watch(() => this.options.variables.call(this.vm), cb, {
         immediate: true,
       })
     } else {
@@ -106,6 +119,12 @@ class SmartApollo {
     throw new Error('Not implemented')
   }
 
+  errorHandler (...args) {
+    this.options.error && this.options.error.call(this.vm, ...args)
+    this.vm.$apollo.error && this.vm.$apollo.error.call(this.vm, ...args)
+    this.vm.$apollo.provider.errorHandler && this.vm.$apollo.provider.errorHandler.call(this.vm, ...args)
+  }
+
   catchError (error) {
     if (error.graphQLErrors && error.graphQLErrors.length !== 0) {
       console.error(`GraphQL execution errors for ${this.type} '${this.key}'`)
@@ -123,9 +142,7 @@ class SmartApollo {
       }
     }
 
-    if (typeof this.options.error === 'function') {
-      this.options.error.call(this.vm, error)
-    }
+    this.errorHandler(error)
   }
 
   destroy () {
@@ -142,11 +159,6 @@ export class SmartQuery extends SmartApollo {
   loading = false
 
   constructor (vm, key, options, autostart = true) {
-    // Options object callback
-    while (typeof options === 'function') {
-      options = options.call(vm)
-    }
-
     // Simple query
     if (!options.query) {
       const query = options
@@ -209,17 +221,21 @@ export class SmartQuery extends SmartApollo {
       this.loadingDone()
     }
 
+    const hasResultCallback = typeof this.options.result === 'function'
+
     if (typeof data === 'undefined') {
       // No result
     } else if (typeof this.options.update === 'function') {
       this.vm[this.key] = this.options.update.call(this.vm, data)
     } else if (data[this.key] === undefined) {
       console.error(`Missing ${this.key} attribute on result`, data)
-    } else {
+    } else if (!this.options.manual) {
       this.vm[this.key] = data[this.key]
+    } else if (!hasResultCallback) {
+      console.error(`${this.key} query must have a 'result' hook in manual mode`)
     }
 
-    if (typeof this.options.result === 'function') {
+    if (hasResultCallback) {
       this.options.result.call(this.vm, result)
     }
   }
@@ -229,14 +245,23 @@ export class SmartQuery extends SmartApollo {
     this.loadingDone()
   }
 
+  get loadingKey () {
+    return this.options.loadingKey || this.vm.$apollo.loadingKey
+  }
+
+  watchLoading (...args) {
+    this.options.watchLoading && this.options.watchLoading.call(this.vm, ...args)
+    this.vm.$apollo.watchLoading && this.vm.$apollo.watchLoading.call(this.vm, ...args)
+    this.vm.$apollo.provider.watchLoading && this.vm.$apollo.provider.watchLoading.call(this.vm, ...args)
+  }
+
   applyLoadingModifier (value) {
-    if (this.options.loadingKey) {
-      this.vm[this.options.loadingKey] += value
+    const loadingKey = this.loadingKey
+    if (loadingKey && typeof this.vm[loadingKey] === 'number') {
+      this.vm[loadingKey] += value
     }
 
-    if (this.options.watchLoading) {
-      this.options.watchLoading.call(this.vm, value === 1, value)
-    }
+    this.watchLoading(value === 1, value)
   }
 
   loadingDone () {
@@ -249,7 +274,12 @@ export class SmartQuery extends SmartApollo {
   fetchMore (...args) {
     if (this.observer) {
       this.maySetLoading(true)
-      return this.observer.fetchMore(...args)
+      return this.observer.fetchMore(...args).then(result => {
+        if (!result.loading) {
+          this.loadingDone()
+        }
+        return result
+      })
     }
   }
 
@@ -264,7 +294,12 @@ export class SmartQuery extends SmartApollo {
   refetch (variables) {
     variables && (this.options.variables = variables)
     if (this.observer) {
-      const result = this.observer.refetch(variables)
+      const result = this.observer.refetch(variables).then((result) => {
+        if (!result.loading) {
+          this.loadingDone()
+        }
+        return result
+      })
       this.maySetLoading()
       return result
     }
@@ -309,30 +344,34 @@ export class SmartSubscription extends SmartApollo {
     'error',
     'throttle',
     'debounce',
+    'linkedQuery',
   ]
 
-  constructor (vm, key, options, autostart = true) {
-    // Options object callback
-    while (typeof options === 'function') {
-      options = options.call(vm)
-    }
-
-    super(vm, key, options, autostart)
-  }
-
   executeApollo (variables) {
+    const variablesJson = JSON.stringify(variables)
     if (this.sub) {
+      // do nothing if subscription is already running using exactly the same variables
+      if (variablesJson === this.previousVariablesJson) {
+        return
+      }
       this.sub.unsubscribe()
     }
+    this.previousVariablesJson = variablesJson
 
-    // Create observer
-    this.observer = this.vm.$apollo.subscribe(this.generateApolloOptions(variables))
+    const apolloOptions = this.generateApolloOptions(variables)
 
-    // Create subscription
-    this.sub = this.observer.subscribe({
-      next: this.nextResult.bind(this),
-      error: this.catchError.bind(this),
-    })
+    if (this.options.linkedQuery) {
+      this.sub = this.options.linkedQuery.subscribeToMore(apolloOptions)
+    } else {
+      // Create observer
+      this.observer = this.vm.$apollo.subscribe(apolloOptions)
+
+      // Create subscription
+      this.sub = this.observer.subscribe({
+        next: this.nextResult.bind(this),
+        error: this.catchError.bind(this),
+      })
+    }
 
     super.executeApollo(variables)
   }

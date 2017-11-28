@@ -9,6 +9,9 @@ export class ApolloProvider {
     }
     this.clients = options.clients || {}
     this.clients.defaultClient = this.defaultClient = options.defaultClient
+    this.defaultOptions = options.defaultOptions
+    this.watchLoading = options.watchLoading
+    this.errorHandler = options.errorHandler
 
     this.prefetchQueries = []
   }
@@ -32,9 +35,11 @@ export class ApolloProvider {
     for (let key in apolloOptions) {
       const options = apolloOptions[key]
       if (
-        !options.query || (
-          (typeof options.ssr === 'undefined' || options.ssr) &&
-          (typeof options.prefetch !== 'undefined' && options.prefetch)
+        key.charAt(0) !== '$' && (
+          !options.query || (
+            (typeof options.ssr === 'undefined' || options.ssr) &&
+            (typeof options.prefetch !== 'undefined' && options.prefetch)
+          )
         )
       ) {
         this.willPrefetchQuery(options, options.client || componentClient)
@@ -103,16 +108,19 @@ export class ApolloProvider {
           result = prefetch
         }
 
-        const optVariables = queryOptions.variables
-
         if (!result) {
           return Promise.resolve()
-        } else if (prefetchType === 'boolean' && typeof optVariables !== 'undefined') {
-          // Reuse `variables` option with `prefetch: true`
-          if (typeof optVariables === 'function') {
-            variables = optVariables.call(context)
+        } else if (prefetchType === 'boolean') {
+          const optVariables = queryOptions.variables
+          if (typeof optVariables !== 'undefined') {
+            // Reuse `variables` option with `prefetch: true`
+            if (typeof optVariables === 'function') {
+              variables = optVariables.call(context)
+            } else {
+              variables = optVariables
+            }
           } else {
-            variables = optVariables
+            variables = undefined
           }
         } else {
           variables = result
@@ -122,26 +130,36 @@ export class ApolloProvider {
 
     // Query
     return new Promise((resolve, reject) => {
-      const options = omit(queryOptions, VUE_APOLLO_QUERY_KEYWORDS)
+      const options = omit(queryOptions, [
+        ...VUE_APOLLO_QUERY_KEYWORDS,
+        'fetchPolicy',
+      ])
       options.variables = variables
+      options.fetchPolicy = 'network-only'
       client.query(options).then(resolve, reject)
     })
   }
 
-  exportStates (options) {
+  getStates (options) {
     const finalOptions = Object.assign({}, {
       exportNamespace: '',
-      globalName: '__APOLLO_STATE__',
-      attachTo: 'window',
     }, options)
-
-    let js = `${finalOptions.attachTo}.${finalOptions.globalName} = {`
+    const states = {}
     for (const key in this.clients) {
       const client = this.clients[key]
       const state = { [client.reduxRootKey || 'apollo']: client.getInitialState() }
-      js += `['${finalOptions.exportNamespace}${key}']:${JSON.stringify(state)},`
+      states[`${finalOptions.exportNamespace}${key}`] = state
     }
-    js += `};`
+    return states
+  }
+
+  exportStates (options) {
+    const finalOptions = Object.assign({}, {
+      globalName: '__APOLLO_STATE__',
+      attachTo: 'window',
+    }, options)
+    const states = this.getStates(finalOptions)
+    const js = `${finalOptions.attachTo}.${finalOptions.globalName} = ${JSON.stringify(states)};`
     return js
   }
 }

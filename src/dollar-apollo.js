@@ -1,4 +1,5 @@
 import { SmartQuery, SmartSubscription } from './smart-apollo'
+import { reapply } from './utils'
 
 export class DollarApollo {
   constructor (vm) {
@@ -9,6 +10,8 @@ export class DollarApollo {
     this.queries = {}
     this.subscriptions = {}
     this.client = undefined
+    this.loadingKey = undefined
+    this.error = undefined
   }
 
   get provider () {
@@ -72,26 +75,55 @@ export class DollarApollo {
   }
 
   subscribe (options) {
-    const observable = this.getClient(options).subscribe(options)
-    const _subscribe = observable.subscribe.bind(observable)
-    observable.subscribe = (options) => {
-      let sub = _subscribe(options)
-      this._apolloSubscriptions.push(sub)
-      return sub
+    if (!this.vm.$isServer) {
+      const observable = this.getClient(options).subscribe(options)
+      const _subscribe = observable.subscribe.bind(observable)
+      observable.subscribe = (options) => {
+        let sub = _subscribe(options)
+        this._apolloSubscriptions.push(sub)
+        return sub
+      }
+      return observable
     }
-    return observable
   }
 
   addSmartQuery (key, options) {
+    options = reapply(options, this.vm)
+
     const smart = this.queries[key] = new SmartQuery(this.vm, key, options, false)
     smart.autostart()
+
+    if (!this.vm.$isServer) {
+      const subs = options.subscribeToMore
+      if (subs) {
+        if (Array.isArray(subs)) {
+          subs.forEach((sub, index) => {
+            this.addSmartSubscription(`${key}${index}`, {
+              ...sub,
+              linkedQuery: smart,
+            })
+          })
+        } else {
+          this.addSmartSubscription(key, {
+            ...subs,
+            linkedQuery: smart,
+          })
+        }
+      }
+    }
+
     return smart
   }
 
   addSmartSubscription (key, options) {
-    const smart = this.subscriptions[key] = new SmartSubscription(this.vm, key, options, false)
-    smart.autostart()
-    return smart
+    if (!this.vm.$isServer) {
+      options = reapply(options, this.vm)
+
+      const smart = this.subscriptions[key] = new SmartSubscription(this.vm, key, options, false)
+      smart.autostart()
+
+      return smart
+    }
   }
 
   defineReactiveSetter (key, func) {
